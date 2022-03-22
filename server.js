@@ -1,25 +1,11 @@
 const http = require("http");
 const { v4: uuidv4 } = require("uuid");
-const errorHandle = require("./errorHandle");
+const corsHeader = require("./corsHeader");
+const { errorHandle, successHandle } = require("./responseHandle");
 
 const todos = [];
 
 const requetListener = (req, res) => {
-  const htmlHeaders = {
-    "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, Content-Length, X-Requested-With",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "PATCH, POST, GET,OPTIONS,DELETE",
-    "Content-Type": "text/html",
-  };
-  const jsonHeaders = {
-    "Access-Control-Allow-Headers":
-      "Content-Type, Authorization, Content-Length, X-Requested-With",
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "PATCH, POST, GET,OPTIONS,DELETE",
-    "Content-Type": "application/json",
-  };
-
   let body = "";
 
   req.on("data", (chunk) => {
@@ -27,13 +13,9 @@ const requetListener = (req, res) => {
   });
 
   if (req.url === "/" && req.method === "GET") {
-    res.writeHead(200, htmlHeaders);
-    res.write("<h1>This is Todolist Homepage</h1>");
-    res.end();
+    successHandle(res, "<h1>This is Todolist Homepage</h1>", "html");
   } else if (req.url === "/todos" && req.method === "GET") {
-    res.writeHead(200, jsonHeaders);
-    res.write(JSON.stringify({ status: "success", data: todos }));
-    res.end();
+    successHandle(res, todos, "json");
   } else if (req.url === "/todos" && req.method === "POST") {
     req.on("end", () => {
       try {
@@ -43,47 +25,25 @@ const requetListener = (req, res) => {
             title,
             id: uuidv4(),
           });
-          res.writeHead(200, jsonHeaders);
-          res.write(
-            JSON.stringify({
-              status: "success",
-              data: todos,
-            })
-          );
-          res.end();
+          successHandle(res, todos, "json");
         } else {
-          errorHandle(res);
+          errorHandle(res, 400, "title 屬性不存在", "json");
         }
       } catch {
-        errorHandle(res);
+        errorHandle(res, 400, "欄位, 格式未填寫正確", "json");
       }
     });
   } else if (req.url === "/todos" && req.method === "DELETE") {
     todos.length = 0;
-    res.writeHead(200, jsonHeaders);
-    res.write(
-      JSON.stringify({
-        status: "success",
-        data: todos,
-      })
-    );
-    res.end();
+    successHandle(res, todos, "json");
   } else if (req.url.startsWith("/todos/") && req.method === "DELETE") {
     const id = req.url.split("/").pop();
     const index = todos.findIndex((item) => item.id === id);
-
     if (index !== -1) {
       todos.splice(index, 1);
-      res.writeHead(200, jsonHeaders);
-      res.write(
-        JSON.stringify({
-          status: "success",
-          data: todos,
-        })
-      );
-      res.end();
+      successHandle(res, todos, "json");
     } else {
-      errorHandle(res);
+      errorHandle(res, 400, "項目不存在", "json");
     }
   } else if (req.url.startsWith("/todos/") && req.method === "PATCH") {
     req.on("end", () => {
@@ -91,30 +51,23 @@ const requetListener = (req, res) => {
         const id = req.url.split("/").pop();
         const index = todos.findIndex((item) => item.id === id);
         const title = JSON.parse(body).title;
-        if (title !== undefined && index !== -1) {
-          todos[index].title = title;
-          res.writeHead(200, jsonHeaders);
-          res.write(
-            JSON.stringify({
-              status: "success",
-              data: todos,
-            })
-          );
-          res.end();
+        if (title === undefined) {
+          errorHandle(res, 400, "title 屬性不存在", "json");
+        } else if (index === -1) {
+          errorHandle(res, 400, "項目不存在", "json");
         } else {
-          errorHandle(res);
+          todos[index].title = title;
+          successHandle(res, todos, "json");
         }
       } catch {
-        errorHandle(res);
+        errorHandle(res, 400, "欄位, 格式未填寫正確", "json");
       }
     });
   } else if (req.method === "OPTIONS") {
-    res.writeHead(200, htmlHeaders);
+    res.writeHead(200, corsHeader);
     res.end();
   } else {
-    res.writeHead(404, htmlHeaders);
-    res.write("<h1>404 Not Found</h1>");
-    res.end();
+    errorHandle(res, 404, "<h1>頁面不存在</h1>", "html");
   }
 };
 
